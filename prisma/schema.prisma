@@ -1,0 +1,1211 @@
+// AI Commerce Operating System — Prisma Schema
+// SQLite locally, designed to be portable to PostgreSQL.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// AUTHENTICATION & RBAC
+// ============================================================
+
+model User {
+  id                String        @id @default(cuid())
+  email             String        @unique
+  name              String?
+  passwordHash      String?
+  image             String?
+  status            String        @default("ACTIVE") // ACTIVE | SUSPENDED | PENDING | BANNED
+  emailVerifiedAt   DateTime?
+  lastLoginAt       DateTime?
+  failedLoginCount  Int           @default(0)
+  lockedUntil       DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  // Relations
+  roleAssignments   UserRoleAssignment[]
+  sessions          Session[]
+  refreshTokens     RefreshToken[]
+  passwordResets    PasswordReset[]
+  apiKeys           ApiKey[]
+  auditLogs         AuditLog[]
+  aiUsages           AiUsage[]
+  aiConversations   AiConversation[]
+  aiMemories         AiMemory[]
+  projects          Project[]
+  notifications     Notification[]
+  backgroundJobs    BackgroundJob[]
+  stores            Store[]
+  // Intelligence layer relations
+  discoveredProducts  DiscoveredProduct[]
+  productAnalyses     ProductAnalysis[]
+  supplierReports     SupplierReport[]
+  productMatches      ProductMatch[]
+  competitorReports   CompetitorReport[]
+  trendReports        TrendReport[]
+  profitCalculations  ProfitCalculation[]
+  listings             Listing[]
+  mediaAssets          MediaAsset[]
+  promptTemplates      PromptTemplate[]
+  aiDecisions          AiDecision[]
+  // Sprint 5 intelligence
+  competitorShops     CompetitorShop[]
+  priceHistories      PriceHistory[]
+  profitForecasts     ProfitForecast[]
+  automationRules     AutomationRule[]
+  opportunityScans    OpportunityScan[]
+  supplierComparisons  SupplierComparison[]
+  marketGaps           MarketGap[]
+
+  @@index([email])
+}
+
+// ============================================================
+// STORE (Multi-Store Platform)
+// ============================================================
+
+model Store {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String
+  description     String?
+  logo            String?
+  marketplace     String   @default("etsy")
+  storeUrl        String?
+  country         String   @default("US")
+  currency        String   @default("USD")
+  language        String   @default("en")
+  timezone        String   @default("America/New_York")
+  status          String   @default("active")
+  notes           String?
+  brandName       String?
+  brandVoice      String?
+  brandColors     String?
+  defaultAiProvider String?
+  seoPreferences    String?
+  imageStylePrefs   String?
+  videoStylePrefs   String?
+  notificationSettings String?
+  listingTemplates String?
+  promptTemplates  String?
+  apiConnections    String?
+  metadata          String?
+  // Store intelligence (Sprint 6)
+  niche            String?  // e.g. "handcrafted walnut home decor"
+  targetCustomer   String?  // e.g. "homeowners aged 30-55, premium taste"
+  avgSellingPrice  Float?
+  preferredSuppliers String? // JSON array of supplier names/types
+  preferredCountries String? // JSON array
+  preferredMarketplaces String? // JSON array
+  preferredProfitMargin Float? // target margin percentage
+  preferredShippingStrategy String? // e.g. "free shipping over $50"
+  brandWritingStyle  String?  // e.g. "warm, artisanal, premium"
+  brandVisualStyle   String?  // e.g. "minimalist, natural light, neutral tones"
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  projects          Project[]
+  discoveredProducts DiscoveredProduct[]
+  listings          Listing[]
+  aiMemories        AiMemory[]
+  automationRules   AutomationRule[]
+  notifications     Notification[]
+  competitorShops   CompetitorShop[]
+  opportunityScans  OpportunityScan[]
+  marketGaps        MarketGap[]
+  supplierComparisons SupplierComparison[]
+  profitCalculations ProfitCalculation[]
+  profitForecasts  ProfitForecast[]
+  trendReports      TrendReport[]
+  competitorReports CompetitorReport[]
+  priceHistories    PriceHistory[]
+
+  @@index([userId])
+  @@index([marketplace])
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  key         String   @unique // e.g. "admin", "user", "moderator"
+  name        String
+  description String?
+  isSystem    Boolean  @default(false) // system roles cannot be deleted
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  permissions RolePermission[]
+  users       UserRoleAssignment[]
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  key         String   @unique // e.g. "ai:chat", "admin:users:read"
+  name        String
+  description String?
+  category    String   @default("general")
+  createdAt   DateTime @default(now())
+
+  roles       RolePermission[]
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model UserRoleAssignment {
+  userId    String
+  roleId    String
+  user      User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role  @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  assignedAt DateTime @default(now())
+
+  @@id([userId, roleId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token        String   @unique
+  userAgent    String?
+  ipAddress    String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  revokedAt    DateTime?
+
+  @@index([userId])
+}
+
+model RefreshToken {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token        String   @unique
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  revokedAt    DateTime?
+
+  @@index([userId])
+}
+
+model PasswordReset {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model ApiKey {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  keyHash     String   @unique
+  keyPreview  String   // last 4 chars
+  scopes      String?  // comma-separated scopes
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime @default(now())
+  revokedAt   DateTime?
+
+  @@index([userId])
+}
+
+// ============================================================
+// AI PROVIDERS & MODELS
+// ============================================================
+
+model AiProvider {
+  id            String   @id @default(cuid())
+  key           String   @unique // "zai" | "openai" | "gemini" | "claude" | "grok" | "openrouter" | "deepseek" | "mistral" | "cohere" | "local"
+  name          String
+  description   String?
+  baseUrl       String?
+  isActive      Boolean  @default(true)
+  isDefault     Boolean  @default(false)
+  capabilities  String   @default("text") // comma-separated: text,vision,audio,embeddings,images
+  config        String?  // JSON string of provider-specific config
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  models        AiModel[]
+  usages        AiUsage[]
+}
+
+model AiModel {
+  id            String   @id @default(cuid())
+  providerId    String
+  provider      AiProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  modelId       String   // external model id, e.g. "gpt-4o"
+  displayName   String
+  contextWindow Int      @default(8000)
+  inputCostPer1k  Float  @default(0)
+  outputCostPer1k Float @default(0)
+  capabilities  String   @default("text")
+  isActive      Boolean  @default(true)
+  isDefault     Boolean  @default(false)
+  metadata      String?  // JSON
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([providerId])
+  @@unique([providerId, modelId])
+}
+
+// ============================================================
+// PROMPT ENGINE (versioned, editable)
+// ============================================================
+
+model Prompt {
+  id          String   @id @default(cuid())
+  key         String   @unique // e.g. "listing:title", "seo:keywords"
+  name        String
+  description String?
+  category    String   @default("general")
+  agentType   String?  // which agent this prompt belongs to
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  versions    PromptVersion[]
+}
+
+model PromptVersion {
+  id          String   @id @default(cuid())
+  promptId    String
+  prompt      Prompt   @relation(fields: [promptId], references: [id], onDelete: Cascade)
+  version     Int
+  content     String
+  variables   String?  // JSON list of variable names
+  notes       String?
+  isCurrent   Boolean  @default(false)
+  createdBy   String?
+  createdAt   DateTime @default(now())
+
+  @@unique([promptId, version])
+  @@index([promptId])
+}
+
+// ============================================================
+// AI AGENTS & ORCHESTRATION
+// ============================================================
+
+model AiAgent {
+  id            String   @id @default(cuid())
+  key           String   @unique // "research" | "seo" | "trend" | "listing" | "supplier" | "profit" | "pricing" | "similarity" | "vision" | "prompt" | "strategy"
+  name          String
+  description   String?
+  category      String   @default("commerce")
+  defaultModel  String?
+  systemPromptKey String? // references Prompt.key
+  capabilities  String?  // JSON list of capabilities
+  isActive      Boolean  @default(true)
+  config        String?  // JSON of agent-specific config (temperature, etc.)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model AiConversation {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agentKey    String   @default("general")
+  title        String?
+  metadata     String?  // JSON
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  messages     AiMessage[]
+  @@index([userId])
+}
+
+model AiMessage {
+  id            String   @id @default(cuid())
+  conversationId String
+  conversation  AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role          String   // user | assistant | system | tool
+  content       String
+  model         String?
+  providerKey   String?
+  tokensIn      Int      @default(0)
+  tokensOut     Int      @default(0)
+  costUsd       Float    @default(0)
+  latencyMs     Int      @default(0)
+  metadata      String?  // JSON
+  isError       Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  @@index([conversationId])
+}
+
+model AiUsage {
+  id            String   @id @default(cuid())
+  userId        String?
+  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  providerId    String?
+  provider      AiProvider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  agentKey      String?
+  modelId       String?
+  endpoint      String   // chat | vision | embedding | image
+  tokensIn      Int      @default(0)
+  tokensOut     Int      @default(0)
+  costUsd       Float    @default(0)
+  latencyMs     Int      @default(0)
+  success       Boolean  @default(true)
+  errorMessage  String?
+  metadata      String?  // JSON
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+  @@index([agentKey])
+  @@index([createdAt])
+}
+
+model AiMemory {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  storeId          String?
+  store            Store? @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  agentKey    String?
+  scope        String   @default("user") // user | agent | global
+  kind        String   @default("fact") // fact | preference | project | context
+  content     String
+  embedding    String?  // future: vector embedding (JSON or blob)
+  importance   Float    @default(0.5)
+  metadata     String?  // JSON
+  expiresAt    DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId])
+  @@index([agentKey])
+}
+
+// ============================================================
+// COMMERCE DOMAIN (extensible for future modules)
+// ============================================================
+
+model Project {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  storeId          String?
+  store            Store? @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  name        String
+  description String?
+  type        String   @default("general") // listing | research | campaign | general
+  status      String   @default("draft") // draft | active | archived
+  marketplace String   @default("etsy")
+  metadata     String?  // JSON
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  products     Product[]
+  listings     Listing[]
+
+  @@index([userId])
+}
+
+model Product {
+  id           String   @id @default(cuid())
+  projectId    String
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title        String
+  description  String?
+  category     String?
+  tags         String?  // JSON array
+  price        Float?
+  currency     String   @default("USD")
+  sku          String?
+  status       String   @default("idea") // idea | research | listing | published
+  metadata     String?  // JSON
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([projectId])
+}
+
+// ============================================================
+// NOTIFICATIONS
+// ============================================================
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  storeId          String?
+  store            Store? @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  type      String   @default("info") // info | success | warning | error
+  title     String
+  message   String
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// ============================================================
+// BACKGROUND JOBS / QUEUES
+// ============================================================
+
+model BackgroundJob {
+  id          String   @id @default(cuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  queue       String   @default("default") // default | ai | export | import
+  type        String   // e.g. "ai:research", "export:listings"
+  payload     String?  // JSON
+  status      String   @default("queued") // queued | running | completed | failed | cancelled
+  progress    Float    @default(0)
+  result      String?  // JSON
+  error       String?
+  startedAt  DateTime?
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status])
+  @@index([queue])
+  @@index([type])
+}
+
+// ============================================================
+// FEATURE FLAGS
+// ============================================================
+
+model FeatureFlag {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  name        String
+  description String?
+  enabled     Boolean  @default(false)
+  rollout     Float    @default(0) // 0..1 percentage
+  config      String?  // JSON
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ============================================================
+// SUBSCRIPTION PLANS
+// ============================================================
+
+model SubscriptionPlan {
+  id            String   @id @default(cuid())
+  key           String   @unique // "free" | "pro" | "business" | "enterprise"
+  name          String
+  description   String?
+  priceMonthly  Float    @default(0)
+  priceYearly   Float    @default(0)
+  currency      String   @default("USD")
+  limits        String?  // JSON of usage limits
+  isActive      Boolean  @default(true)
+  isDefault     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  planId       String
+  plan         SubscriptionPlan @relation(fields: [planId], references: [id])
+  status       String   @default("active") // active | canceled | past_due | trialing
+  startedAt    DateTime @default(now())
+  endsAt       DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// ============================================================
+// AUDIT LOG & SYSTEM LOGS
+// ============================================================
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action      String   // e.g. "user.login", "admin.update_provider"
+  category    String   @default("general") // auth | admin | ai | system | commerce
+  resource    String?  // entity affected
+  resourceId  String?
+  ipAddress   String?
+  userAgent    String?
+  metadata     String?  // JSON
+  severity    String   @default("info") // debug | info | warning | error | critical
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([category])
+  @@index([createdAt])
+}
+
+model SystemLog {
+  id          String   @id @default(cuid())
+  level       String   @default("info") // debug | info | warn | error
+  source      String   // orchestrator | auth | api | job
+  message     String
+  context     String?  // JSON
+  createdAt   DateTime @default(now())
+
+  @@index([level])
+  @@index([source])
+  @@index([createdAt])
+}
+
+// ============================================================
+// PLATFORM SETTINGS (key-value store for config)
+// ============================================================
+
+model Setting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  category    String   @default("general")
+  isEncrypted Boolean  @default(false)
+  updatedAt   DateTime @updatedAt
+  updatedBy   String?
+}
+
+// ============================================================
+// INTELLIGENCE LAYER (Sprint 3 & 4)
+// ============================================================
+
+// A discovered product from any marketplace source. The "source" field
+// identifies the connector (etsy, alibaba, 1688, amazon, pinterest, etc).
+// imageUrl and sourceUrl allow deep-linking back to the original listing.
+model DiscoveredProduct {
+  id            String   @id @default(cuid())
+  userId        String?
+  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  storeId          String?
+  store            Store? @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  source        String   // etsy | alibaba | 1688 | amazon | pinterest | google-trends | tiktok | instagram | reddit
+  sourceId      String?  // ID at the source marketplace
+  sourceUrl     String?
+  title         String
+  description   String?
+  imageUrl      String?
+  category      String?
+  price         Float?
+  currency      String   @default("USD")
+  tags          String?  // JSON array
+  materials     String?  // JSON array
+  marketplace   String   @default("etsy") // target marketplace
+  metadata      String?  // JSON of raw source data
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  analyses          ProductAnalysis[]
+  supplierReports   SupplierReport[]
+  competitorReports CompetitorReport[]
+  profitCalculations ProfitCalculation[]
+  listings          Listing[]
+  aiDecisions       AiDecision[]
+  priceHistories    PriceHistory[]
+  profitForecasts   ProfitForecast[]
+  matches           ProductMatch[]        @relation("sourceProduct")
+  matchesTarget     ProductMatch[]        @relation("targetProduct")
+
+  @@index([userId])
+  @@index([source])
+  @@index([createdAt])
+}
+
+// AI-computed analysis for a discovered product. One analysis per
+// discoveredProduct + agentKey combo (so you can re-run with a fresh agent).
+model ProductAnalysis {
+  id                String   @id @default(cuid())
+  userId            String?
+  user              User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  discoveredProductId String?
+  discoveredProduct  DiscoveredProduct? @relation(fields: [discoveredProductId], references: [id], onDelete: Cascade)
+  agentKey          String   // research | seo | trend | listing | supplier | profit | pricing | similarity | vision | prompt | strategy | general
+  // Scores 0-100 (higher = better, except riskScore where lower is better)
+  trendScore        Int?
+  demandScore       Int?
+  competitionScore  Int?
+  opportunityScore  Int?
+  riskScore         Int?
+  // Financial estimates
+  estimatedMonthlySales Int?
+  estimatedRevenue      Float?
+  estimatedProfit      Float?
+  estimatedRoi         Float?
+  estimatedMargin      Float?
+  suggestedPrice       Float?
+  averageMarketPrice   Float?
+  priceRangeMin        Float?
+  priceRangeMax        Float?
+  marketSaturation     String? // low | medium | high
+  seasonality          String? // year-round | seasonal | holiday | trending
+  growthPotential      String? // low | medium | high
+  // AI reasoning text
+  reasoning           String?
+  recommendations     String? // JSON array
+  metadata            String? // JSON
+  createdAt           DateTime @default(now())
+
+  @@index([userId])
+  @@index([discoveredProductId])
+  @@index([agentKey])
+  @@index([createdAt])
+}
+
+// Supplier intelligence report. One per discoveredProduct (when sourced
+// from alibaba/1688/aliexpress/made-in-china).
+model SupplierReport {
+  id                String   @id @default(cuid())
+  userId            String?
+  user              User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  discoveredProductId String?
+  discoveredProduct  DiscoveredProduct? @relation(fields: [discoveredProductId], references: [id], onDelete: Cascade)
+  source            String   // alibaba | 1688 | aliexpress | made-in-china
+  supplierName      String?
+  supplierUrl       String?
+  supplierType      String?  // manufacturer | dropshipper | wholesaler
+  country           String?
+  moq               Int?
+  unitCostMin       Float?
+  unitCostMax       Float?
+  leadTimeDays      Int?
+  reliabilityScore  Int?     // 0-100
+  // Badges
+  tradeAssurance    Boolean  @default(false)
+  goldSupplier      Boolean  @default(false)
+  yearsInBusiness   Int?
+  responseTime      String?
+  productionCapacity String?
+  certifications    String?  // JSON array
+  // Composite score 0-100 (computed from the above)
+  supplierScore     Int?
+  // AI reasoning
+  reasoning         String?
+  recommendations   String?  // JSON array
+  metadata          String?  // JSON of raw supplier data
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([userId])
+  @@index([discoveredProductId])
+}
+
+// Product match: source product matched against target product across
+// marketplaces. Used for Etsy→Alibaba/1688 comparison.
+model ProductMatch {
+  id              String   @id @default(cuid())
+  userId          String?
+  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  sourceProductId String?
+  sourceProduct   DiscoveredProduct? @relation("sourceProduct", fields: [sourceProductId], references: [id], onDelete: Cascade)
+  targetProductId String?
+  targetProduct   DiscoveredProduct? @relation("targetProduct", fields: [targetProductId], references: [id], onDelete: Cascade)
+  // Similarity scores 0-100
+  overallSimilarity Int?
+  materialSimilarity Int?
+  designSimilarity   Int?
+  shapeSimilarity   Int?
+  colorSimilarity   Int?
+  patternSimilarity Int?
+  manufacturingSimilarity Int?
+  // Price delta between source and target
+  priceDeltaPct    Float?
+  // AI reasoning
+  reasoning        String?
+  recommendations  String? // JSON array
+  metadata         String? // JSON
+  createdAt        DateTime @default(now())
+
+  @@index([userId])
+  @@index([sourceProductId])
+  @@index([targetProductId])
+}
+
+// Competitor analysis for a discovered product (what other Etsy shops sell
+// a similar product + how well).
+model CompetitorReport {
+  id              String   @id @default(cuid())
+  userId          String?
+  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  storeId          String?
+  store            Store? @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  discoveredProductId String?
+  discoveredProduct  DiscoveredProduct? @relation(fields: [discoveredProductId], references: [id], onDelete: Cascade)
+  shopName        String?
+  shopUrl         String?
+  listingUrl      String?
+  listingTitle    String?
+  listingPrice    Float?
+  listingImage    String?
+  // Quality scores 0-100
+  pricingScore    Int?
+  listingQualityScore Int?
+  seoScore        Int?
+  imageScore      Int?
+  // Insights
+  positioning     String?
+  marketGaps      String?  // JSON array
+  competitiveAdvantages String? // JSON array
+  weaknesses      String?  // JSON array
+  // AI reasoning
+  reasoning       String?
+  recommendations String?  // JSON array
+  metadata        String?  // JSON
+  createdAt       DateTime @default(now())
+
+  @@index([userId])
+  @@index([discoveredProductId])
+}
+
+// Trend report — can be standalone (a niche keyword) or attached to a
+// discovered product. Multiple sources feed in.
+model TrendReport {
+  id              String   @id @default(cuid())
+  userId          String?
+  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  storeId          String?
+  store            Store? @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  keyword         String
+  source          String   // google-trends | pinterest | tiktok | etsy | reddit | instagram
+  // Trend metrics
+  momentum        String   // rising | stable | declining
+  trendScore      Int?     // 0-100 (higher = stronger)
+  confidenceScore Int?     // 0-100 (how sure we are of the trend)
+  // Drivers + actions
+  drivers         String?  // JSON array
+  recommendedAction String?
+  seasonality     String?
+  // Example product ideas
+  exampleProducts String?  // JSON array
+  // AI reasoning
+  reasoning       String?
+  metadata        String?  // JSON
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId])
+  @@index([keyword])
+  @@index([source])
+}
+
+// Enhanced profit calculation — supports product cost/shipping/packaging/
+// taxes/fees/ads/discounts/currency.
+model ProfitCalculation {
+  id              String   @id @default(cuid())
+  userId          String?
+  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  storeId          String?
+  store            Store? @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  discoveredProductId String?
+  discoveredProduct  DiscoveredProduct? @relation(fields: [discoveredProductId], references: [id], onDelete: Cascade)
+  // Inputs
+  productCost     Float
+  shippingCost    Float    @default(0)
+  packagingCost   Float    @default(0)
+  taxPct          Float    @default(0)
+  marketplaceFeePct Float   @default(0)
+  paymentFeePct   Float    @default(0)
+  advertisingCost Float    @default(0)
+  discountPct     Float    @default(0)
+  currency        String   @default("USD")
+  suggestedPrice  Float
+  // Computed outputs
+  totalCost       Float?
+  totalFees       Float?
+  netProfit       Float?
+  grossProfit     Float?
+  roi             Float?
+  margin           Float?
+  breakEvenPrice   Float?
+  breakEvenUnits   Int?
+  // AI insight
+  aiInsight       String?
+  recommendations  String?  // JSON array
+  createdAt       DateTime @default(now())
+
+  @@index([userId])
+  @@index([discoveredProductId])
+}
+
+// AI-generated listing — full marketplace-ready content.
+model Listing {
+  id              String   @id @default(cuid())
+  userId          String?
+  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  storeId          String?
+  store            Store? @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  discoveredProductId String?
+  discoveredProduct  DiscoveredProduct? @relation(fields: [discoveredProductId], references: [id], onDelete: Cascade)
+  projectId       String?
+  project         Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  marketplace     String   @default("etsy")
+  // Generated fields
+  title           String?
+  description     String?
+  bulletPoints    String?  // JSON array
+  highlights      String?  // JSON array
+  tags            String?  // JSON array
+  keywords        String?  // JSON array
+  materials       String?  // JSON array
+  colors          String?  // JSON array
+  style           String?
+  room            String?
+  occasion        String?
+  holiday         String?
+  personalization String?
+  metaDescription String?
+  // SEO score from SEO Engine
+  seoScore        Int?
+  // AI metadata
+  model           String?
+  provider        String?
+  tokensIn        Int      @default(0)
+  tokensOut       Int      @default(0)
+  latencyMs       Int      @default(0)
+  // Versioning — re-generating creates a new version
+  version         Int      @default(1)
+  isCurrent       Boolean  @default(true)
+  metadata        String?  // JSON
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  seoAnalyses     SeoAnalysis[]
+  mediaAssets     MediaAsset[]
+
+  @@index([userId])
+  @@index([discoveredProductId])
+  @@index([projectId])
+}
+
+// SEO analysis for a listing.
+model SeoAnalysis {
+  id              String   @id @default(cuid())
+  listingId       String
+  listing         Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  // Scores
+  seoScore        Int?     // 0-100
+  keywordDensity  String?  // JSON map of keyword → density %
+  missingKeywords String?  // JSON array
+  readabilityScore Int?
+  searchVisibilityEstimate Int?
+  // AI suggestions
+  suggestions     String?  // JSON array
+  metadata        String?
+  createdAt       DateTime @default(now())
+
+  @@index([listingId])
+}
+
+// Media asset — generated or uploaded image/video with associated prompt.
+model MediaAsset {
+  id              String   @id @default(cuid())
+  userId          String?
+  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  listingId       String?
+  listing         Listing? @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  type            String   // image | video
+  promptId        String?
+  prompt          String?
+  filePath        String?  // persisted file path on disk
+  dataUrl         String?  // base64 data URL (for short-term display)
+  size            String?  // 1024x1024 etc.
+  model           String?
+  latencyMs       Int?
+  metadata        String?
+  createdAt       DateTime @default(now())
+
+  @@index([userId])
+  @@index([listingId])
+}
+
+// Reusable prompt template for image/video/marketing generation.
+model PromptTemplate {
+  id              String   @id @default(cuid())
+  userId          String?
+  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  name            String
+  category        String   // image | video | lifestyle | photography | marketing
+  // The template with {{variables}} for substitution
+  template        String
+  variables       String?  // JSON array of variable names
+  style           String?  // luxury | minimal | seasonal | commercial
+  isPublic        Boolean  @default(false)
+  metadata        String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId])
+  @@index([category])
+  @@index([isPublic])
+}
+
+// AI Decision — a high-level business recommendation attached to a
+// discovered product. Answers "Should I sell this?".
+model AiDecision {
+  id              String   @id @default(cuid())
+  userId          String?
+  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  discoveredProductId String?
+  discoveredProduct  DiscoveredProduct? @relation(fields: [discoveredProductId], references: [id], onDelete: Cascade)
+  // The decision: go | hold | avoid | pivot
+  verdict         String   // go | hold | avoid | pivot
+  // Confidence 0-100
+  confidence      Int?
+  // Reasoning + recommended next action
+  reasoning       String?
+  nextAction      String?
+  // Linked analyses for context
+  analysisIds     String?  // JSON array of ProductAnalysis IDs
+  metadata        String?
+  createdAt       DateTime @default(now())
+
+  @@index([userId])
+  @@index([discoveredProductId])
+}
+
+// ============================================================
+// SPRINT 5 — COMMERCE INTELLIGENCE & AUTOMATION
+// ============================================================
+
+// Saved competitor shop for monitoring changes over time.
+model CompetitorShop {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  storeId          String?
+  store            Store? @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  shopName    String
+  shopUrl     String
+  marketplace String   @default("etsy")
+  status      String   @default("active") // active | paused | archived
+  lastScannedAt DateTime?
+  metadata    String?  // JSON of shop-level stats
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  changes     CompetitorChange[]
+
+  @@index([userId])
+  @@index([marketplace])
+}
+
+// A detected change in a competitor shop (new product, price change, SEO update, etc.)
+model CompetitorChange {
+  id              String   @id @default(cuid())
+  competitorShopId String
+  competitorShop  CompetitorShop @relation(fields: [competitorShopId], references: [id], onDelete: Cascade)
+  changeType      String   // new-product | price-change | seo-update | listing-update | visual-update | new-category
+  severity        String   @default("info") // info | warning | important
+  title           String
+  description     String?
+  productUrl      String?
+  oldValue        String?
+  newValue        String?
+  detectedAt      DateTime @default(now())
+  metadata        String?  // JSON
+
+  @@index([competitorShopId])
+  @@index([changeType])
+  @@index([detectedAt])
+}
+
+// Price history tracking for a discovered product (time series of prices).
+model PriceHistory {
+  id              String   @id @default(cuid())
+  discoveredProductId String?
+  discoveredProduct  DiscoveredProduct? @relation(fields: [discoveredProductId], references: [id], onDelete: Cascade)
+  userId          String?
+  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  storeId          String?
+  store            Store? @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  price           Float
+  currency        String   @default("USD")
+  source          String   // etsy | alibaba | amazon | etc.
+  priceType       String   @default("listing") // listing | sale | competitor
+  detectedAt      DateTime @default(now())
+
+  @@index([discoveredProductId])
+  @@index([userId])
+  @@index([detectedAt])
+}
+
+// Profit forecast — monthly/quarterly/yearly scenarios.
+model ProfitForecast {
+  id              String   @id @default(cuid())
+  userId          String?
+  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  storeId          String?
+  store            Store? @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  discoveredProductId String?
+  discoveredProduct  DiscoveredProduct? @relation(fields: [discoveredProductId], references: [id], onDelete: Cascade)
+  period          String   // monthly | quarterly | yearly
+  // Scenarios
+  bestCaseProfit  Float?
+  expectedCaseProfit Float?
+  worstCaseProfit Float?
+  bestCaseRevenue Float?
+  expectedCaseRevenue Float?
+  worstCaseRevenue Float?
+  // Assumptions
+  assumptions     String?  // JSON array of assumption strings
+  seasonalFactors String?  // JSON map of month → factor
+  // AI insight
+  aiInsight       String?
+  recommendations String?  // JSON array
+  createdAt       DateTime @default(now())
+
+  @@index([userId])
+  @@index([discoveredProductId])
+}
+
+// Automation rule — configurable workflow that runs on a schedule.
+model AutomationRule {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  storeId          String?
+  store            Store? @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  name            String
+  description     String?
+  // What to run
+  workflowType    String   // trend-scan | supplier-scan | profit-report | competitor-monitor | opportunity-alert | listing-draft | price-alert
+  config          String?  // JSON of workflow-specific config
+  // Schedule
+  scheduleType    String   @default("daily") // daily | weekly | monthly | interval | manual
+  scheduleConfig  String?  // JSON (e.g. {hour: 9, minute: 0, dayOfWeek: 1})
+  // Status
+  isActive        Boolean  @default(true)
+  lastRunAt       DateTime?
+  nextRunAt       DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  runs            AutomationRun[]
+
+  @@index([userId])
+  @@index([workflowType])
+  @@index([isActive])
+}
+
+// A single execution of an automation rule.
+model AutomationRun {
+  id              String   @id @default(cuid())
+  automationRuleId String
+  automationRule  AutomationRule @relation(fields: [automationRuleId], references: [id], onDelete: Cascade)
+  status          String   @default("pending") // pending | running | completed | failed | cancelled
+  result          String?  // JSON of run output
+  error           String?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime @default(now())
+
+  @@index([automationRuleId])
+  @@index([status])
+}
+
+// Opportunity scan result — auto-discovered product opportunities ranked by score.
+model OpportunityScan {
+  id              String   @id @default(cuid())
+  userId          String?
+  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  storeId          String?
+  store            Store? @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  scanType        String   // trending | low-competition | high-roi | seasonal | emerging-category
+  keyword         String?
+  // The opportunity
+  productTitle    String
+  productSource   String   // etsy | alibaba | etc.
+  sourceUrl       String?
+  imageUrl        String?
+  // Scores
+  opportunityScore Int?    // 0-100 composite
+  trendScore      Int?
+  demandScore     Int?
+  competitionScore Int?
+  profitScore      Int?
+  // AI summary
+  aiSummary       String?
+  risks           String?  // JSON array
+  recommendedAction String?
+  confidence      Int?     // 0-100
+  // Metadata
+  metadata        String?  // JSON
+  createdAt       DateTime @default(now())
+
+  @@index([userId])
+  @@index([scanType])
+  @@index([opportunityScore])
+  @@index([createdAt])
+}
+
+// Supplier comparison — head-to-head comparison of multiple suppliers.
+model SupplierComparison {
+  id              String   @id @default(cuid())
+  userId          String?
+  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  storeId          String?
+  store            Store? @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  keyword         String
+  // Comparison data (JSON array of supplier objects with all comparison fields)
+  suppliers       String?  // JSON array
+  // Winner
+  bestSupplierId  String?
+  bestSupplierName String?
+  reasoning       String?
+  recommendations String?  // JSON array
+  metadata        String?  // JSON
+  createdAt       DateTime @default(now())
+
+  @@index([userId])
+  @@index([keyword])
+}
+
+// Market gap — identified missing opportunity in a niche.
+model MarketGap {
+  id              String   @id @default(cuid())
+  userId          String?
+  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  storeId          String?
+  store            Store? @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  keyword         String
+  gapType         String   // high-demand-few-sellers | weak-listings | poor-photography | poor-seo | missing-styles | missing-colors | missing-personalization
+  gapTitle        String
+  gapDescription  String?
+  // Scores
+  opportunityScore Int?
+  confidence      Int?
+  // AI insight
+  aiSummary       String?
+  recommendedAction String?
+  risks           String?  // JSON array
+  metadata        String?  // JSON
+  createdAt       DateTime @default(now())
+
+  @@index([userId])
+  @@index([gapType])
+  @@index([keyword])
+  @@index([opportunityScore])
+}
+
+// Add back-relations to existing models

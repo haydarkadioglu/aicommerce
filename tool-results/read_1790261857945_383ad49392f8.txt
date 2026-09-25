@@ -1,0 +1,724 @@
+     1→"use client";
+     2→
+     3→import { useState, useCallback } from "react";
+     4→import { useApiClient } from "@/hooks/use-api";
+     5→import { useToast } from "@/hooks/use-toast";
+     6→import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+     7→import { Button } from "@/components/ui/button";
+     8→import { Input } from "@/components/ui/input";
+     9→import { Label } from "@/components/ui/label";
+    10→import { Textarea } from "@/components/ui/textarea";
+    11→import { Badge } from "@/components/ui/badge";
+    12→import { Skeleton } from "@/components/ui/skeleton";
+    13→import { Separator } from "@/components/ui/separator";
+    14→import { Progress } from "@/components/ui/progress";
+    15→import {
+    16→  Select,
+    17→  SelectContent,
+    18→  SelectItem,
+    19→  SelectTrigger,
+    20→  SelectValue,
+    21→} from "@/components/ui/select";
+    22→import {
+    23→  Search,
+    24→  Loader2,
+    25→  Sparkles,
+    26→  TrendingUp,
+    27→  TrendingDown,
+    28→  Minus,
+    29→  Target,
+    30→  AlertTriangle,
+    31→  DollarSign,
+    32→  ShoppingCart,
+    33→  Factory,
+    34→  Users,
+    35→  Brain,
+    36→  CheckCircle2,
+    37→  XCircle,
+    38→  Clock,
+    39→  ExternalLink,
+    40→  ChevronRight,
+    41→  Lightbulb,
+    42→} from "lucide-react";
+    43→
+    44→type DiscoveredProduct = {
+    45→  dbId: string | null;
+    46→  source: string;
+    47→  title: string;
+    48→  description?: string;
+    49→  imageUrl?: string;
+    50→  category?: string;
+    51→  price?: number;
+    52→  currency?: string;
+    53→  sourceUrl?: string;
+    54→  tags?: string[];
+    55→  metadata?: Record<string, any>;
+    56→};
+    57→
+    58→type AnalysisResult = {
+    59→  [key: string]: any;
+    60→  meta: {
+    61→    model: string;
+    62→    tokensIn: number;
+    63→    tokensOut: number;
+    64→    latencyMs: number;
+    65→  };
+    66→};
+    67→
+    68→const SOURCE_COLORS: Record<string, string> = {
+    69→  etsy: "bg-orange-500/10 text-orange-500",
+    70→  alibaba: "bg-blue-500/10 text-blue-500",
+    71→  "1688": "bg-red-500/10 text-red-500",
+    72→  amazon: "bg-amber-500/10 text-amber-500",
+    73→  pinterest: "bg-rose-500/10 text-rose-500",
+    74→  "google-trends": "bg-emerald-500/10 text-emerald-500",
+    75→  tiktok: "bg-violet-500/10 text-violet-500",
+    76→};
+    77→
+    78→export function ProductIntelligence() {
+    79→  const { apiFetch } = useApiClient();
+    80→  const { toast } = useToast();
+    81→  const [query, setQuery] = useState("handcrafted walnut wood wall clock");
+    82→  const [mode, setMode] = useState("keyword");
+    83→  const [searching, setSearching] = useState(false);
+    84→  const [results, setResults] = useState<DiscoveredProduct[]>([]);
+    85→  const [selectedProduct, setSelectedProduct] = useState<DiscoveredProduct | null>(null);
+    86→  const [analyses, setAnalyses] = useState<Record<string, AnalysisResult>>({});
+    87→  const [analyzing, setAnalyzing] = useState<string | null>(null);
+    88→
+    89→  const search = async () => {
+    90→    if (!query.trim()) {
+    91→      toast({ title: "Enter a search query", variant: "destructive" });
+    92→      return;
+    93→    }
+    94→    setSearching(true);
+    95→    setResults([]);
+    96→    setSelectedProduct(null);
+    97→    setAnalyses({});
+    98→    try {
+    99→      const data = await apiFetch<{
+   100→        results: DiscoveredProduct[];
+   101→        meta: { totalFound: number; persisted: number; latencyMs: number };
+   102→      }>("/api/discover", {
+   103→        method: "POST",
+   104→        body: JSON.stringify({
+   105→          query,
+   106→          mode,
+   107→          limit: 15,
+   108→          persist: true,
+   109→        }),
+   110→      });
+   111→      setResults(data.results || []);
+   112→      toast({
+   113→        title: `Found ${data.results.length} products`,
+   114→        description: `Searched ${data.meta.totalFound} sources in ${data.meta.latencyMs}ms`,
+   115→      });
+   116→    } catch (err: any) {
+   117→      toast({
+   118→        title: "Discovery failed",
+   119→        description: err?.message,
+   120→        variant: "destructive",
+   121→      });
+   122→    } finally {
+   123→      setSearching(false);
+   124→    }
+   125→  };
+   126→
+   127→  const runAnalysis = async (analysisType: string) => {
+   128→    if (!selectedProduct?.dbId) return;
+   129→    setAnalyzing(analysisType);
+   130→    try {
+   131→      const data = await apiFetch<{
+   132→        analysis: any;
+   133→        savedRecordId: string | null;
+   134→        meta: { model: string; tokensIn: number; tokensOut: number; latencyMs: number };
+   135→      }>("/api/intelligence", {
+   136→        method: "POST",
+   137→        body: JSON.stringify({
+   138→          discoveredProductId: selectedProduct.dbId,
+   139→          analysisType,
+   140→        }),
+   141→      });
+   142→      setAnalyses((prev) => ({
+   143→        ...prev,
+   144→        [analysisType]: { ...data.analysis, meta: data.meta },
+   145→      }));
+   146→      toast({ title: `${analysisType} complete` });
+   147→    } catch (err: any) {
+   148→      toast({
+   149→        title: "Analysis failed",
+   150→        description: err?.message,
+   151→        variant: "destructive",
+   152→      });
+   153→    } finally {
+   154→      setAnalyzing(null);
+   155→    }
+   156→  };
+   157→
+   158→  return (
+   159→    <div className="space-y-6 p-4 md:p-6 max-w-7xl mx-auto">
+   160→      {/* Header */}
+   161→      <div className="flex items-center gap-2">
+   162→        <span className="flex size-9 items-center justify-center rounded-lg brand-gradient text-white">
+   163→          <Brain className="size-5" />
+   164→        </span>
+   165→        <div>
+   166→          <h2 className="text-2xl font-bold tracking-tight">Product Intelligence</h2>
+   167→          <p className="text-sm text-muted-foreground">
+   168→            Discover, analyze, and decide — one connected intelligence platform.
+   169→          </p>
+   170→        </div>
+   171→      </div>
+   172→
+   173→      {/* Search bar */}
+   174→      <Card>
+   175→        <CardHeader>
+   176→          <CardTitle className="text-base">Discover Products</CardTitle>
+   177→          <CardDescription>
+   178→            Search across Etsy, Alibaba, 1688, Amazon, Pinterest, Google Trends, and TikTok.
+   179→          </CardDescription>
+   180→        </CardHeader>
+   181→        <CardContent className="space-y-3">
+   182→          <div className="flex flex-wrap gap-2">
+   183→            <Select value={mode} onValueChange={setMode}>
+   184→              <SelectTrigger className="w-36">
+   185→                <SelectValue />
+   186→              </SelectTrigger>
+   187→              <SelectContent>
+   188→                <SelectItem value="keyword">Keyword</SelectItem>
+   189→                <SelectItem value="category">Category</SelectItem>
+   190→                <SelectItem value="trend">Trend</SelectItem>
+   191→                <SelectItem value="style">Style</SelectItem>
+   192→                <SelectItem value="material">Material</SelectItem>
+   193→              </SelectContent>
+   194→            </Select>
+   195→            <Input
+   196→              value={query}
+   197→              onChange={(e) => setQuery(e.target.value)}
+   198→              placeholder="Enter keyword, product name, URL, or trend…"
+   199→              className="flex-1 min-w-[200px]"
+   200→              onKeyDown={(e) => e.key === "Enter" && search()}
+   201→              disabled={searching}
+   202→            />
+   203→            <Button
+   204→              onClick={search}
+   205→              disabled={searching || !query.trim()}
+   206→              className="brand-gradient text-white"
+   207→            >
+   208→              {searching ? (
+   209→                <Loader2 className="size-4 animate-spin" />
+   210→              ) : (
+   211→                <Search className="size-4" />
+   212→              )}
+   213→              Discover
+   214→            </Button>
+   215→          </div>
+   216→        </CardContent>
+   217→      </Card>
+   218→
+   219→      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+   220→        {/* Left: results list */}
+   221→        <div className="lg:col-span-1 space-y-4">
+   222→          <div className="flex items-center justify-between">
+   223→            <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+   224→              Discovered ({results.length})
+   225→            </h3>
+   226→            {results.length > 0 && (
+   227→              <Badge variant="outline" className="text-xs">
+   228→                {new Set(results.map((r) => r.source)).size} sources
+   229→              </Badge>
+   230→            )}
+   231→          </div>
+   232→
+   233→          {searching ? (
+   234→            <div className="space-y-2">
+   235→              {[1, 2, 3, 4, 5].map((i) => (
+   236→                <Skeleton key={i} className="h-24 w-full" />
+   237→              ))}
+   238→            </div>
+   239→          ) : results.length === 0 ? (
+   240→            <Card className="border-dashed">
+   241→              <CardContent className="py-12 flex flex-col items-center justify-center text-center">
+   242→                <Search className="size-10 text-muted-foreground/40 mb-2" />
+   243→                <p className="text-sm text-muted-foreground">
+   244→                  No products discovered yet. Enter a query above.
+   245→                </p>
+   246→              </CardContent>
+   247→            </Card>
+   248→          ) : (
+   249→            <ul className="space-y-2 max-h-[600px] overflow-y-auto scroll-thin pr-1">
+   250→              {results.map((product, i) => (
+   251→                <li key={i}>
+   252→                  <button
+   253→                    onClick={() => {
+   254→                      setSelectedProduct(product);
+   255→                      setAnalyses({});
+   256→                    }}
+   257→                    className={
+   258→                      "group w-full text-left rounded-md border p-3 transition-all " +
+   259→                      (selectedProduct === product
+   260→                        ? "border-primary bg-primary/5"
+   261→                        : "hover:border-primary/40 hover:bg-accent/30")
+   262→                    }
+   263→                  >
+   264→                    <div className="flex items-start gap-2">
+   265→                      <span
+   266→                        className={
+   267→                          "flex size-6 items-center justify-center rounded text-[10px] font-bold shrink-0 " +
+   268→                          (SOURCE_COLORS[product.source] || "bg-muted text-muted-foreground")
+   269→                        }
+   270→                      >
+   271→                        {product.source.slice(0, 2).toUpperCase()}
+   272→                      </span>
+   273→                      <div className="min-w-0 flex-1">
+   274→                        <p className="text-sm font-medium truncate">{product.title}</p>
+   275→                        <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+   276→                          {product.price != null && (
+   277→                            <span>${product.price.toFixed(2)} {product.currency}</span>
+   278→                          )}
+   279→                          {product.category && <span>· {product.category}</span>}
+   280→                        </div>
+   281→                      </div>
+   282→                      {selectedProduct === product && (
+   283→                        <ChevronRight className="size-4 text-primary shrink-0" />
+   284→                      )}
+   285→                    </div>
+   286→                  </button>
+   287→                </li>
+   288→              ))}
+   289→            </ul>
+   290→          )}
+   291→        </div>
+   292→
+   293→        {/* Right: analysis panel */}
+   294→        <div className="lg:col-span-2 space-y-4">
+   295→          {!selectedProduct ? (
+   296→            <Card className="border-dashed">
+   297→              <CardContent className="py-16 flex flex-col items-center justify-center text-center">
+   298→                <Brain className="size-12 text-muted-foreground/40 mb-3" />
+   299→                <h3 className="text-lg font-semibold">Select a product to analyze</h3>
+   300→                <p className="mt-1 max-w-md text-sm text-muted-foreground">
+   301→                  Run AI-powered analysis: trend scores, supplier intelligence,
+   302→                  competitor analysis, profit estimation, and business decisions.
+   303→                </p>
+   304→              </CardContent>
+   305→            </Card>
+   306→          ) : (
+   307→            <>
+   308→              {/* Product header */}
+   309→              <Card>
+   310→                <CardContent className="p-4">
+   311→                  <div className="flex items-start gap-3">
+   312→                    <span
+   313→                      className={
+   314→                        "flex size-10 items-center justify-center rounded-lg text-xs font-bold shrink-0 " +
+   315→                        (SOURCE_COLORS[selectedProduct.source] || "bg-muted text-muted-foreground")
+   316→                      }
+   317→                    >
+   318→                      {selectedProduct.source.slice(0, 3).toUpperCase()}
+   319→                    </span>
+   320→                    <div className="min-w-0 flex-1">
+   321→                      <h3 className="font-semibold">{selectedProduct.title}</h3>
+   322→                      {selectedProduct.description && (
+   323→                        <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
+   324→                          {selectedProduct.description}
+   325→                        </p>
+   326→                      )}
+   327→                      <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+   328→                        {selectedProduct.price != null && (
+   329→                          <span className="font-medium">
+   330→                            ${selectedProduct.price.toFixed(2)} {selectedProduct.currency}
+   331→                          </span>
+   332→                        )}
+   333→                        {selectedProduct.sourceUrl && (
+   334→                          <a
+   335→                            href={selectedProduct.sourceUrl}
+   336→                            target="_blank"
+   337→                            rel="noopener noreferrer"
+   338→                            className="flex items-center gap-1 hover:text-primary"
+   339→                          >
+   340→                            Source <ExternalLink className="size-3" />
+   341→                          </a>
+   342→                        )}
+   343→                      </div>
+   344→                    </div>
+   345→                  </div>
+   346→                </CardContent>
+   347→              </Card>
+   348→
+   349→              {/* Analysis actions */}
+   350→              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+   351→                <AnalysisButton
+   352→                  label="Product Analysis"
+   353→                  icon={Target}
+   354→                  color="text-violet-500 bg-violet-500/10"
+   355→                  onClick={() => runAnalysis("product-analysis")}
+   356→                  loading={analyzing === "product-analysis"}
+   357→                />
+   358→                <AnalysisButton
+   359→                  label="Supplier Intel"
+   360→                  icon={Factory}
+   361→                  color="text-blue-500 bg-blue-500/10"
+   362→                  onClick={() => runAnalysis("supplier")}
+   363→                  loading={analyzing === "supplier"}
+   364→                />
+   365→                <AnalysisButton
+   366→                  label="Competitor"
+   367→                  icon={Users}
+   368→                  color="text-amber-500 bg-amber-500/10"
+   369→                  onClick={() => runAnalysis("competitor")}
+   370→                  loading={analyzing === "competitor"}
+   371→                />
+   372→                <AnalysisButton
+   373→                  label="Trend"
+   374→                  icon={TrendingUp}
+   375→                  color="text-emerald-500 bg-emerald-500/10"
+   376→                  onClick={() => runAnalysis("trend")}
+   377→                  loading={analyzing === "trend"}
+   378→                />
+   379→                <AnalysisButton
+   380→                  label="Profit"
+   381→                  icon={DollarSign}
+   382→                  color="text-rose-500 bg-rose-500/10"
+   383→                  onClick={() => runAnalysis("profit")}
+   384→                  loading={analyzing === "profit"}
+   385→                />
+   386→                <AnalysisButton
+   387→                  label="Decision"
+   388→                  icon={Brain}
+   389→                  color="text-primary bg-primary/10"
+   390→                  onClick={() => runAnalysis("decision")}
+   391→                  loading={analyzing === "decision"}
+   392→                />
+   393→              </div>
+   394→
+   395→              {/* Analysis results */}
+   396→              {analyses["product-analysis"] && (
+   397→                <AnalysisCard title="Product Analysis" icon={Target}>
+   398→                  <ScoreGrid
+   399→                    scores={{
+   400→                      Trend: analyses["product-analysis"].trendScore,
+   401→                      Demand: analyses["product-analysis"].demandScore,
+   402→                      Competition: analyses["product-analysis"].competitionScore,
+   403→                      Opportunity: analyses["product-analysis"].opportunityScore,
+   404→                      Risk: analyses["product-analysis"].riskScore,
+   405→                    }}
+   406→                  />
+   407→                  <Separator className="my-3" />
+   408→                  <FinancialGrid
+   409→                    data={{
+   410→                      "Est. Monthly Sales": analyses["product-analysis"].estimatedMonthlySales,
+   411→                      "Est. Revenue": analyses["product-analysis"].estimatedRevenue
+   412→                        ? `$${analyses["product-analysis"].estimatedRevenue.toLocaleString()}`
+   413→                        : null,
+   414→                      "Est. Profit": analyses["product-analysis"].estimatedProfit
+   415→                        ? `$${analyses["product-analysis"].estimatedProfit.toLocaleString()}`
+   416→                        : null,
+   417→                      ROI: analyses["product-analysis"].estimatedRoi
+   418→                        ? `${analyses["product-analysis"].estimatedRoi}%`
+   419→                        : null,
+   420→                      Margin: analyses["product-analysis"].estimatedMargin
+   421→                        ? `${analyses["product-analysis"].estimatedMargin}%`
+   422→                        : null,
+   423→                      "Suggested Price": analyses["product-analysis"].suggestedPrice
+   424→                        ? `$${analyses["product-analysis"].suggestedPrice.toFixed(2)}`
+   425→                        : null,
+   426→                      "Avg Market Price": analyses["product-analysis"].averageMarketPrice
+   427→                        ? `$${analyses["product-analysis"].averageMarketPrice.toFixed(2)}`
+   428→                        : null,
+   429→                      Saturation: analyses["product-analysis"].marketSaturation,
+   430→                    }}
+   431→                  />
+   432→                  {analyses["product-analysis"].reasoning && (
+   433→                    <div className="mt-3 rounded-md bg-muted/30 p-3 text-sm">
+   434→                      <p className="font-medium mb-1">AI Reasoning</p>
+   435→                      <p className="text-muted-foreground">
+   436→                        {analyses["product-analysis"].reasoning}
+   437→                      </p>
+   438→                    </div>
+   439→                  )}
+   440→                  <RecommendationsList
+   441→                    recs={analyses["product-analysis"].recommendations}
+   442→                  />
+   443→                </AnalysisCard>
+   444→              )}
+   445→
+   446→              {analyses["supplier"] && (
+   447→                <AnalysisCard title="Supplier Intelligence" icon={Factory}>
+   448→                  <FinancialGrid
+   449→                    data={{
+   450→                      "Supplier Name": analyses["supplier"].supplierName,
+   451→                      Type: analyses["supplier"].supplierType,
+   452→                      Country: analyses["supplier"].country,
+   453→                      MOQ: analyses["supplier"].moq,
+   454→                      "Unit Cost": analyses["supplier"].unitCostMin
+   455→                        ? `$${analyses["supplier"].unitCostMin}-${analyses["supplier"].unitCostMax}`
+   456→                        : null,
+   457→                      "Lead Time": analyses["supplier"].leadTimeDays
+   458→                        ? `${analyses["supplier"].leadTimeDays} days`
+   459→                        : null,
+   460→                      "Reliability": analyses["supplier"].reliabilityScore
+   461→                        ? `${analyses["supplier"].reliabilityScore}/100`
+   462→                        : null,
+   463→                      "Supplier Score": analyses["supplier"].supplierScore
+   464→                        ? `${analyses["supplier"].supplierScore}/100`
+   465→                        : null,
+   466→                    }}
+   467→                  />
+   468→                  <div className="flex gap-2 mt-3">
+   469→                    {analyses["supplier"].tradeAssurance && (
+   470→                      <Badge variant="outline" className="text-emerald-500">Trade Assurance</Badge>
+   471→                    )}
+   472→                    {analyses["supplier"].goldSupplier && (
+   473→                      <Badge variant="outline" className="text-amber-500">Gold Supplier</Badge>
+   474→                    )}
+   475→                  </div>
+   476→                  <RecommendationsList recs={analyses["supplier"].recommendations} />
+   477→                </AnalysisCard>
+   478→              )}
+   479→
+   480→              {analyses["competitor"] && (
+   481→                <AnalysisCard title="Competitor Intelligence" icon={Users}>
+   482→                  <FinancialGrid
+   483→                    data={{
+   484→                      Shop: analyses["competitor"].shopName,
+   485→                      "Listing Price": analyses["competitor"].listingPrice
+   486→                        ? `$${analyses["competitor"].listingPrice}`
+   487→                        : null,
+   488→                      "Pricing Score": analyses["competitor"].pricingScore
+   489→                        ? `${analyses["competitor"].pricingScore}/100`
+   490→                        : null,
+   491→                      "Listing Quality": analyses["competitor"].listingQualityScore
+   492→                        ? `${analyses["competitor"].listingQualityScore}/100`
+   493→                        : null,
+   494→                      "SEO Score": analyses["competitor"].seoScore
+   495→                        ? `${analyses["competitor"].seoScore}/100`
+   496→                        : null,
+   497→                      "Image Score": analyses["competitor"].imageScore
+   498→                        ? `${analyses["competitor"].imageScore}/100`
+   499→                        : null,
+   500→                    }}
+   501→                  />
+   502→                  {analyses["competitor"].positioning && (
+   503→                    <div className="mt-3 rounded-md bg-muted/30 p-3 text-sm">
+   504→                      <p className="font-medium mb-1">Positioning</p>
+   505→                      <p className="text-muted-foreground">
+   506→                        {analyses["competitor"].positioning}
+   507→                      </p>
+   508→                    </div>
+   509→                  )}
+   510→                  <RecommendationsList recs={analyses["competitor"].recommendations} />
+   511→                </AnalysisCard>
+   512→              )}
+   513→
+   514→              {analyses["trend"] && (
+   515→                <AnalysisCard title="Trend Intelligence" icon={TrendingUp}>
+   516→                  <div className="flex items-center gap-3">
+   517→                    <MomentumBadge momentum={analyses["trend"].momentum} />
+   518→                    {analyses["trend"].trendScore != null && (
+   519→                      <ScoreBar label="Trend Score" value={analyses["trend"].trendScore} />
+   520→                    )}
+   521→                    {analyses["trend"].confidenceScore != null && (
+   522→                      <ScoreBar label="Confidence" value={analyses["trend"].confidenceScore} />
+   523→                    )}
+   524→                  </div>
+   525→                  {analyses["trend"].reasoning && (
+   526→                    <div className="mt-3 rounded-md bg-muted/30 p-3 text-sm">
+   527→                      <p className="text-muted-foreground">{analyses["trend"].reasoning}</p>
+   528→                    </div>
+   529→                  )}
+   530→                  {analyses["trend"].recommendedAction && (
+   531→                    <div className="mt-2 flex items-start gap-2 text-sm">
+   532→                      <Lightbulb className="size-4 text-amber-500 mt-0.5 shrink-0" />
+   533→                      <p>{analyses["trend"].recommendedAction}</p>
+   534→                    </div>
+   535→                  )}
+   536→                </AnalysisCard>
+   537→              )}
+   538→
+   539→              {analyses["decision"] && (
+   540→                <AnalysisCard title="AI Decision" icon={Brain}>
+   541→                  <div className="flex items-center gap-3">
+   542→                    <VerdictBadge verdict={analyses["decision"].verdict} />
+   543→                    {analyses["decision"].confidence != null && (
+   544→                      <ScoreBar label="Confidence" value={analyses["decision"].confidence} />
+   545→                    )}
+   546→                  </div>
+   547→                  {analyses["decision"].reasoning && (
+   548→                    <div className="mt-3 rounded-md bg-muted/30 p-3 text-sm">
+   549→                      <p className="text-muted-foreground">
+   550→                        {analyses["decision"].reasoning}
+   551→                      </p>
+   552→                    </div>
+   553→                  )}
+   554→                  {analyses["decision"].nextAction && (
+   555→                    <div className="mt-2 flex items-start gap-2 text-sm">
+   556→                      <Target className="size-4 text-primary mt-0.5 shrink-0" />
+   557→                      <p>
+   558→                        <span className="font-medium">Next action: </span>
+   559→                        {analyses["decision"].nextAction}
+   560→                      </p>
+   561→                    </div>
+   562→                  )}
+   563→                </AnalysisCard>
+   564→              )}
+   565→
+   566→              {analyzing && !analyses[analyzing] && (
+   567→                <Card>
+   568→                  <CardContent className="py-8 flex items-center justify-center gap-2 text-muted-foreground">
+   569→                    <Loader2 className="size-5 animate-spin" />
+   570→                    <span className="text-sm">Running {analyzing} analysis…</span>
+   571→                  </CardContent>
+   572→                </Card>
+   573→              )}
+   574→            </>
+   575→          )}
+   576→        </div>
+   577→      </div>
+   578→    </div>
+   579→  );
+   580→}
+   581→
+   582→// ============================================================
+   583→// Helper components
+   584→// ============================================================
+   585→
+   586→function AnalysisButton({
+   587→  label,
+   588→  icon: Icon,
+   589→  color,
+   590→  onClick,
+   591→  loading,
+   592→}: {
+   593→  label: string;
+   594→  icon: React.ComponentType<{ className?: string }>;
+   595→  color: string;
+   596→  onClick: () => void;
+   597→  loading?: boolean;
+   598→}) {
+   599→  return (
+   600→    <button
+   601→      onClick={onClick}
+   602→      disabled={loading}
+   603→      className="group flex items-center gap-2 rounded-md border px-3 py-2 text-sm text-left transition-all hover:border-primary/40 hover:bg-accent/30 disabled:opacity-50"
+   604→    >
+   605→      <span className={"flex size-7 items-center justify-center rounded " + color}>
+   606→        {loading ? <Loader2 className="size-3.5 animate-spin" /> : <Icon className="size-3.5" />}
+   607→      </span>
+   608→      <span className="font-medium">{label}</span>
+   609→    </button>
+   610→  );
+   611→}
+   612→
+   613→function AnalysisCard({
+   614→  title,
+   615→  icon: Icon,
+   616→  children,
+   617→}: {
+   618→  title: string;
+   619→  icon: React.ComponentType<{ className?: string }>;
+   620→  children: React.ReactNode;
+   621→}) {
+   622→  return (
+   623→    <Card>
+   624→      <CardHeader className="pb-2">
+   625→        <CardTitle className="flex items-center gap-2 text-base">
+   626→          <Icon className="size-4 text-primary" />
+   627→          {title}
+   628→        </CardTitle>
+   629→      </CardHeader>
+   630→      <CardContent>{children}</CardContent>
+   631→    </Card>
+   632→  );
+   633→}
+   634→
+   635→function ScoreGrid({ scores }: { scores: Record<string, number | undefined> }) {
+   636→  return (
+   637→    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+   638→      {Object.entries(scores).map(([label, value]) => (
+   639→        <div key={label} className="rounded-md border bg-muted/20 p-2 text-center">
+   640→          <p className="text-xs text-muted-foreground">{label}</p>
+   641→          <p className="text-lg font-bold">
+   642→            {value != null ? value : "—"}
+   643→          </p>
+   644→        </div>
+   645→      ))}
+   646→    </div>
+   647→  );
+   648→}
+   649→
+   650→function FinancialGrid({ data }: { data: Record<string, any> }) {
+   651→  return (
+   652→    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+   653→      {Object.entries(data).map(([label, value]) => (
+   654→        <div key={label} className="rounded-md border bg-muted/20 p-2">
+   655→          <p className="text-xs text-muted-foreground">{label}</p>
+   656→          <p className="text-sm font-semibold mt-0.5 truncate">
+   657→            {value != null && value !== undefined ? String(value) : "—"}
+   658→          </p>
+   659→        </div>
+   660→      ))}
+   661→    </div>
+   662→  );
+   663→}
+   664→
+   665→function RecommendationsList({ recs }: { recs: string[] | undefined }) {
+   666→  if (!recs || recs.length === 0) return null;
+   667→  return (
+   668→    <div className="mt-3 space-y-1">
+   669→      <p className="text-xs font-semibold uppercase text-muted-foreground">
+   670→        Recommendations
+   671→      </p>
+   672→      {recs.map((rec, i) => (
+   673→        <div key={i} className="flex items-start gap-2 text-sm">
+   674→          <CheckCircle2 className="size-4 text-emerald-500 mt-0.5 shrink-0" />
+   675→          <span>{rec}</span>
+   676→        </div>
+   677→      ))}
+   678→    </div>
+   679→  );
+   680→}
+   681→
+   682→function ScoreBar({ label, value }: { label: string; value: number }) {
+   683→  return (
+   684→    <div className="flex-1">
+   685→      <div className="flex items-center justify-between text-xs mb-1">
+   686→        <span className="text-muted-foreground">{label}</span>
+   687→        <span className="font-medium">{value}/100</span>
+   688→      </div>
+   689→      <Progress value={value} className="h-1.5" />
+   690→    </div>
+   691→  );
+   692→}
+   693→
+   694→function MomentumBadge({ momentum }: { momentum: string }) {
+   695→  const config: Record<string, { icon: any; color: string; label: string }> = {
+   696→    rising: { icon: TrendingUp, color: "text-emerald-500 bg-emerald-500/10", label: "Rising" },
+   697→    declining: { icon: TrendingDown, color: "text-rose-500 bg-rose-500/10", label: "Declining" },
+   698→    stable: { icon: Minus, color: "text-muted-foreground bg-muted", label: "Stable" },
+   699→  };
+   700→  const c = config[momentum] || config.stable;
+   701→  return (
+   702→    <span className={"flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium " + c.color}>
+   703→      <c.icon className="size-3" />
+   704→      {c.label}
+   705→    </span>
+   706→  );
+   707→}
+   708→
+   709→function VerdictBadge({ verdict }: { verdict: string }) {
+   710→  const config: Record<string, { icon: any; color: string; label: string }> = {
+   711→    go: { icon: CheckCircle2, color: "text-emerald-500 bg-emerald-500/10", label: "GO" },
+   712→    hold: { icon: Clock, color: "text-amber-500 bg-amber-500/10", label: "HOLD" },
+   713→    avoid: { icon: XCircle, color: "text-rose-500 bg-rose-500/10", label: "AVOID" },
+   714→    pivot: { icon: AlertTriangle, color: "text-violet-500 bg-violet-500/10", label: "PIVOT" },
+   715→  };
+   716→  const c = config[verdict] || config.hold;
+   717→  return (
+   718→    <span className={"flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-bold " + c.color}>
+   719→      <c.icon className="size-4" />
+   720→      {c.label}
+   721→    </span>
+   722→  );
+   723→}
+   724→
