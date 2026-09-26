@@ -23,10 +23,13 @@ import { useAppStore, type AppView } from "@/stores/app-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { useAuthActions, useApiClient } from "@/hooks/use-api";
 import { relativeTime } from "@/lib/relative-time";
+import { useI18n, availableLocales } from "@/i18n";
 import {
   Store as StoreIcon,
   ChevronDown,
   Plus,
+  Languages,
+  Check,
 } from "lucide-react";
 import {
   Menu,
@@ -43,30 +46,30 @@ import {
 } from "lucide-react";
 
 const VIEW_TITLES: Record<AppView, string> = {
-  landing: "Home",
-  dashboard: "Dashboard",
-  hunter: "Product Hunter",
-  "ai-assistant": "AI Assistant",
-  "product-research": "Product Research",
-  "listing-generator": "Listing Generator",
-  "image-studio": "Image Studio",
-  "seo-studio": "SEO Studio",
-  "profit-calculator": "Profit Calculator",
-  "trend-analysis": "Trend Analysis",
-  "saved-projects": "Saved Projects",
-  memory: "AI Memory",
-  intelligence: "Product Intelligence",
-  advisor: "Business Advisor",
-  opportunities: "Opportunity Scanner",
-  automation: "Automation Center",
-  "competitor-monitor": "Competitor Monitor",
-  "export-center": "Export Center",
-  stores: "Stores",
-  pipeline: "One-Click Pipeline",
-  "listing-studio": "Listing Studio",
-  "media-studio": "Media Studio",
-  settings: "Settings",
-  admin: "Admin Panel",
+  landing: "nav.dashboard",
+  dashboard: "nav.dashboard",
+  hunter: "nav.hunter",
+  "ai-assistant": "nav.aiAssistant",
+  "product-research": "nav.productResearch",
+  "listing-generator": "nav.listingGenerator",
+  "image-studio": "nav.imageStudio",
+  "seo-studio": "nav.seoStudio",
+  "profit-calculator": "nav.profitCalculator",
+  "trend-analysis": "nav.trendAnalysis",
+  "saved-projects": "nav.savedProjects",
+  memory: "nav.memory",
+  intelligence: "nav.intelligence",
+  advisor: "nav.advisor",
+  opportunities: "nav.opportunities",
+  automation: "nav.automation",
+  "competitor-monitor": "nav.competitorMonitor",
+  "export-center": "nav.exportCenter",
+  stores: "nav.stores",
+  pipeline: "nav.pipeline",
+  "listing-studio": "nav.listingGenerator",
+  "media-studio": "nav.imageStudio",
+  settings: "nav.settings",
+  admin: "nav.adminPanel",
 };
 
 type Notification = {
@@ -85,6 +88,7 @@ export function Topbar() {
   const activeStoreId = useAppStore((s) => s.activeStoreId);
   const setActiveStoreId = useAppStore((s) => s.setActiveStoreId);
   const { theme, setTheme } = useTheme();
+  const { t } = useI18n();
   const user = useAuthStore((s) => s.user);
   const isAdmin = useAuthStore((s) => s.isAdmin());
   const impersonatedBy = useAuthStore((s) => s.impersonatedBy);
@@ -188,7 +192,7 @@ export function Topbar() {
         <Menu className="size-4" />
       </Button>
       <h1 className="text-base sm:text-lg font-semibold">
-        {VIEW_TITLES[view]}
+        {t(VIEW_TITLES[view] || "nav.dashboard")}
       </h1>
 
       {/* Store Switcher */}
@@ -257,6 +261,34 @@ export function Topbar() {
           <Sun className="size-4 hidden dark:block" />
           <Moon className="size-4 dark:hidden" />
         </Button>
+
+        {/* Language Switcher */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Switch language"
+            >
+              <Languages className="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {availableLocales.map((l) => (
+              <DropdownMenuItem
+                key={l.code}
+                onClick={() => useI18n.getState().setLocale(l.code)}
+                className={useI18n.getState().locale === l.code ? "bg-accent" : ""}
+              >
+                <span className="mr-2 text-base">{l.flag}</span>
+                <span>{l.name}</span>
+                {useI18n.getState().locale === l.code && (
+                  <Check className="size-3.5 ml-auto text-primary" />
+                )}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         <Button
           variant="ghost"

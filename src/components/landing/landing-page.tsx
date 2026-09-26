@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useAppStore } from "@/stores/app-store";
+import { useI18n } from "@/i18n";
 import {
   Sparkles,
   Moon,
@@ -130,6 +131,7 @@ const TRUST_ICONS = [
 export function LandingPage() {
   const { theme, setTheme } = useTheme();
   const setAuthModal = useAppStore((s) => s.setAuthModal);
+  const { t } = useI18n();
   const [mobileNav, setMobileNav] = useState(false);
 
   const toggleTheme = () => setTheme(theme === "dark" ? "light" : "dark");
@@ -230,7 +232,7 @@ export function LandingPage() {
               className="brand-gradient text-white hover:opacity-90 w-full sm:w-auto"
               onClick={() => setAuthModal("register")}
             >
-              Start building free
+              {t("landing.startFree")}
               <ArrowRight className="size-4" />
             </Button>
             <Button
@@ -240,7 +242,7 @@ export function LandingPage() {
               onClick={() => setAuthModal("login")}
             >
               <Bot className="size-4" />
-              Live demo
+              {t("landing.liveDemo")}
             </Button>
           </div>
 

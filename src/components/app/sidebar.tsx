@@ -2,6 +2,7 @@
 
 import { useAppStore, type AppView } from "@/stores/app-store";
 import { useAuthStore } from "@/stores/auth-store";
+import { useI18n } from "@/i18n";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -35,31 +36,31 @@ import {
 
 type NavItem = {
   key: AppView;
-  label: string;
+  labelKey: string;
   icon: React.ComponentType<{ className?: string }>;
 };
 
 const NAV_ITEMS: NavItem[] = [
-  { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { key: "hunter", label: "Product Hunter", icon: Crosshair },
-  { key: "pipeline", label: "One-Click Pipeline", icon: Zap },
-  { key: "intelligence", label: "Product Intelligence", icon: Radar },
-  { key: "advisor", label: "Business Advisor", icon: Lightbulb },
-  { key: "opportunities", label: "Opportunity Scanner", icon: TrendingUp },
-  { key: "ai-assistant", label: "AI Assistant", icon: Bot },
-  { key: "product-research", label: "Product Research", icon: Search },
-  { key: "listing-generator", label: "Listing Generator", icon: FileText },
-  { key: "image-studio", label: "Image Studio", icon: ImageIcon },
-  { key: "seo-studio", label: "SEO Studio", icon: Tag },
-  { key: "profit-calculator", label: "Profit Calculator", icon: Calculator },
-  { key: "trend-analysis", label: "Trend Analysis", icon: TrendingUp },
-  { key: "saved-projects", label: "Saved Projects", icon: FolderKanban },
-  { key: "competitor-monitor", label: "Competitor Monitor", icon: Users },
-  { key: "automation", label: "Automation Center", icon: Clock },
-  { key: "export-center", label: "Export Center", icon: Database },
-  { key: "stores", label: "Stores", icon: StoreIcon },
-  { key: "memory", label: "AI Memory", icon: Brain },
-  { key: "settings", label: "Settings", icon: SettingsIcon },
+  { key: "dashboard", labelKey: "nav.dashboard", icon: LayoutDashboard },
+  { key: "hunter", labelKey: "nav.hunter", icon: Crosshair },
+  { key: "pipeline", labelKey: "nav.pipeline", icon: Zap },
+  { key: "intelligence", labelKey: "nav.intelligence", icon: Radar },
+  { key: "advisor", labelKey: "nav.advisor", icon: Lightbulb },
+  { key: "opportunities", labelKey: "nav.opportunities", icon: TrendingUp },
+  { key: "ai-assistant", labelKey: "nav.aiAssistant", icon: Bot },
+  { key: "product-research", labelKey: "nav.productResearch", icon: Search },
+  { key: "listing-generator", labelKey: "nav.listingGenerator", icon: FileText },
+  { key: "image-studio", labelKey: "nav.imageStudio", icon: ImageIcon },
+  { key: "seo-studio", labelKey: "nav.seoStudio", icon: Tag },
+  { key: "profit-calculator", labelKey: "nav.profitCalculator", icon: Calculator },
+  { key: "trend-analysis", labelKey: "nav.trendAnalysis", icon: TrendingUp },
+  { key: "saved-projects", labelKey: "nav.savedProjects", icon: FolderKanban },
+  { key: "competitor-monitor", labelKey: "nav.competitorMonitor", icon: Users },
+  { key: "automation", labelKey: "nav.automation", icon: Clock },
+  { key: "export-center", labelKey: "nav.exportCenter", icon: Database },
+  { key: "stores", labelKey: "nav.stores", icon: StoreIcon },
+  { key: "memory", labelKey: "nav.memory", icon: Brain },
+  { key: "settings", labelKey: "nav.settings", icon: SettingsIcon },
 ];
 
 function SidebarContent() {
@@ -69,6 +70,7 @@ function SidebarContent() {
   const isAdmin = useAuthStore((s) => s.isAdmin());
   const logout = useAuthActions();
   const setSidebarOpen = useAppStore((s) => s.setSidebarOpen);
+  const { t } = useI18n();
 
   const initials = user?.name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || "?";
 
@@ -103,7 +105,7 @@ function SidebarContent() {
                   aria-current={active ? "page" : undefined}
                 >
                   <item.icon className="size-4" />
-                  {item.label}
+                  {t(item.labelKey)}
                 </Button>
               </li>
             );

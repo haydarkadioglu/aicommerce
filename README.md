@@ -336,6 +336,40 @@ The architecture is designed for seamless cloud migration:
 3. **AI Providers**: Add API keys in admin panel to activate OpenAI/Gemini/Claude
 4. **Deployment**: `bun run build` produces a standalone Next.js server
 
+## Internationalization (i18n)
+
+The platform supports multiple languages. Currently available:
+
+| Language | Code | Status |
+|---|---|---|
+| English | `en` | ✅ Complete |
+| Turkish | `tr` | ✅ Complete |
+
+### Adding a new language
+
+1. Create a new translation file: `src/locales/{code}.json` (copy from `en.json`)
+2. Add the locale to `src/i18n/index.ts` in the `messages` map and `availableLocales` array
+3. Translate all string values
+4. The language switcher in the topbar will automatically show the new option
+
+### How it works
+
+- Uses a lightweight Zustand-based i18n system (no URL-based routing needed)
+- Language preference is persisted in localStorage
+- The `t("key.path")` function translates strings at runtime
+- Translation files are organized by namespace: `nav`, `auth`, `landing`, `dashboard`, `hunter`, `pipeline`, `stores`, `ai`, `settings`, `admin`, `language`
+
+```typescript
+import { useI18n } from "@/i18n";
+
+function MyComponent() {
+  const { t } = useI18n();
+  return <h1>{t("nav.dashboard")}</h1>;
+  // English: "Dashboard"
+  // Turkish: "Kontrol Paneli"
+}
+```
+
 ## License
 
 MIT
